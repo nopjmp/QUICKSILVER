@@ -39,6 +39,7 @@
 #include "usb_configurator.h"
 #endif
 
+float long_loop;
 // hal
 void clk_init(void);
 extern void flash_load(void);
@@ -320,6 +321,9 @@ int main(void) {
     state.cpu_load = (timer_micros() - lastlooptime);
     //one last check to make sure we catch any looptime problems and rerun autodetect live
     if (loop_ctr == 255 && state.cpu_load > state.looptime_autodetect + 5) {
+      if (state.cpu_load > long_loop) {
+        long_loop = state.cpu_load;
+      }
       blown_loop_counter++;
       if (blown_loop_counter > 100) {
         blown_loop_counter = 0;

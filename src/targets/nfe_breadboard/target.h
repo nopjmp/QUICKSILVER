@@ -2,6 +2,7 @@
 #include "config_helper.h"
 
 #define NFE_Breadboard
+#define ALLOW_USB_ARMING
 
 #define F4
 #define F405
@@ -22,7 +23,7 @@
 #define LED1PIN PIN_C12
 #define LED2PIN PIN_D2
 #define LED2_INVERT
-#define BUZZER_PIN PIN_A2
+#define BUZZER_PIN PIN_A1
 #define BUZZER_INVERT
 #define FPV_PIN PIN_A13
 
@@ -38,7 +39,7 @@
 
 //RADIO
 #ifdef SERIAL_RX
-#define RX_USART USART_PORT1
+#define RX_USART USART_PORT2
 #define SOFTSPI_NONE
 #endif
 
@@ -73,7 +74,7 @@
 #endif
 
 // MOTOR PINS
-#define MOTOR_PIN0 MOTOR_PIN_PC7
-#define MOTOR_PIN1 MOTOR_PIN_PC6
+#define MOTOR_PIN0 MOTOR_PIN_PB0
+#define MOTOR_PIN1 MOTOR_PIN_PB1
 #define MOTOR_PIN2 MOTOR_PIN_PC9
 #define MOTOR_PIN3 MOTOR_PIN_PC8

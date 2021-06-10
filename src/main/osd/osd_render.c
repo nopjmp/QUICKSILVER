@@ -548,7 +548,7 @@ void print_osd_mixed_data(uint8_t string_element_qty, uint8_t data_element_qty, 
 //************************************************************************************************************************************************************************************
 
 void osd_display(void) {
-
+  //extern float long_loop;
   //first check if video signal autodetect needs to run - run if necessary
   extern uint8_t lastsystem; //initialized at 99 for none then becomes 0 or 1 for ntsc/pal
   if (lastsystem > 1)        //if no camera was detected at boot up
@@ -703,7 +703,18 @@ void osd_display(void) {
       osd_display_element++;
       break;
 
-    case 12: //end of regular display - display_trigger counter sticks here till it wraps
+    case 12:
+      if (osd_decode(*rssi, ACTIVE)) {
+        uint8_t osd_long_loop[5];
+        extern float long_loop;
+        fast_fprint(osd_long_loop, 5, long_loop, 0);
+        osd_print_data(osd_long_loop, 5, TEXT, 11 , 2);
+      }
+      osd_display_element++;
+      break;     
+
+
+    case 13: //end of regular display - display_trigger counter sticks here till it wraps
       display_trigger++;
       if (display_trigger == 0)
         osd_display_element = 1;
