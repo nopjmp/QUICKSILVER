@@ -234,6 +234,10 @@ void rx_serial_init() {
 }
 
 void rx_check() {
+  if (serial_rx_port != profile.serial.rx || serial_rx_port == USART_PORT_INVALID) {
+    return;
+  }
+
   if (bind_storage.unified.protocol == RX_SERIAL_PROTOCOL_INVALID) { //If there's no protocol, there's no reason to check failsafe.
     rx_serial_find_protocol();
     return;

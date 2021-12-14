@@ -15,6 +15,7 @@
 #include "flash.h"
 #include "profile.h"
 #include "project.h"
+#include "scheduler.h"
 #include "sixaxis.h"
 #include "util.h"
 #include "util/cbor_helper.h"
@@ -223,7 +224,7 @@ void get_quic(uint8_t *data, uint32_t len) {
   }
 #ifdef DEBUG
   case QUIC_VAL_PERF_COUNTERS: {
-    res = cbor_encode_perf_counters(&enc);
+    res = cbor_encode_task_stats(&enc);
     check_cbor_error(QUIC_CMD_GET);
     send_quic(QUIC_CMD_GET, QUIC_FLAG_NONE, encode_buffer, cbor_encoder_len(&enc));
     break;

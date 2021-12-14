@@ -26,6 +26,7 @@
 #include "project.h"
 #include "rgb_led.h"
 #include "rx.h"
+#include "scheduler.h"
 #include "sixaxis.h"
 #include "util.h"
 #include "vbat.h"
@@ -44,11 +45,6 @@
 
 extern profile_t profile;
 
-uint32_t lastlooptime;
-uint8_t looptime_warning;
-uint8_t blown_loop_counter;
-float looptime_buffer[255];
-
 void failloop(int val);
 
 int random_seed = 0;
@@ -63,10 +59,6 @@ void memory_section_init() {
 }
 
 int main() {
-  //init some initial values
-  //attempt 8k looptime for f405 or 4k looptime for f411
-  state.looptime_autodetect = LOOPTIME;
-
   // init timer so we can use delays etc
   time_init();
 
@@ -158,170 +150,11 @@ int main() {
     failloop(7);
   }
 
-  perf_counter_init();
-
-  lastlooptime = time_micros();
-
-  //
-  //
-  //    MAIN LOOP
-  //
-  //
+  scheduler_init();
 
   while (1) {
-    uint32_t time = time_micros();
-    state.looptime = ((uint32_t)(time - lastlooptime));
-    lastlooptime = time;
-
-    perf_counter_start(PERF_COUNTER_TOTAL);
-
-    if (state.looptime <= 0)
-      state.looptime = 1;
-    state.looptime = state.looptime * 1e-6f;
-    if (state.looptime > 0.02f) { // max loop 20ms
-      failloop(6);
-      //endless loop
-    }
-
-    //looptime_autodetect sequence
-    static uint8_t loop_ctr = 0;
-    if (loop_ctr < 255) {
-      looptime_buffer[loop_ctr] = state.looptime;
-      loop_ctr++;
-      if (loop_ctr == 255) {
-        float sum = 0;
-        for (uint8_t i = 2; i < 255; i++)
-          sum += looptime_buffer[i];
-        float average_looptime = sum / 253.0f;
-        if (average_looptime < .000130f)
-          state.looptime_autodetect = LOOPTIME_8K;
-        else if (average_looptime < .000255f)
-          state.looptime_autodetect = LOOPTIME_4K;
-        else
-          state.looptime_autodetect = LOOPTIME_2K;
-      }
-    }
-
-    state.uptime += state.looptime;
-    if (flags.arm_state)
-      state.armtime += state.looptime;
-
-#ifdef DEBUG
-    debug.totaltime += state.looptime;
-    lpf(&debug.timefilt, state.looptime, 0.998);
-#endif
-
-    if (liberror > 20) {
-      failloop(8);
-      // endless loop
-    }
-
-    // read gyro and accelerometer data
-    perf_counter_start(PERF_COUNTER_GYRO);
-    sixaxis_read();
-    perf_counter_end(PERF_COUNTER_GYRO);
-
-    // all flight calculations and motors
-    perf_counter_start(PERF_COUNTER_CONTROL);
-    control();
-    perf_counter_end(PERF_COUNTER_CONTROL);
-
-    perf_counter_start(PERF_COUNTER_MISC);
-
-    // attitude calculations for level mode
-    imu_calc();
-
-    // battery low logic
-    vbat_calc();
-
-    // check gestures
-    if (flags.on_ground && !flags.gestures_disabled) {
-      gestures();
-    }
-
-    // handle led commands
-    led_update();
-
-#if (RGB_LED_NUMBER > 0)
-    // RGB led control
-    rgb_led_lvc();
-#ifdef RGB_LED_DMA
-    rgb_dma_start();
-#endif
-#endif
-
-#ifdef BUZZER_ENABLE
-    buzzer();
-#endif
-
-    vtx_update();
-
-    perf_counter_end(PERF_COUNTER_MISC);
-
-    // receiver function
-    perf_counter_start(PERF_COUNTER_RX);
-#ifdef SERIAL_RX
-    // if our RX is a serial, only check if we have valid usart and its the one currently active
-    if (serial_rx_port == profile.serial.rx && serial_rx_port != USART_PORT_INVALID) {
-      rx_check();
-    }
-#else
-    // we have a spi RX
-    rx_check();
-#endif
-    perf_counter_end(PERF_COUNTER_RX);
-
-    uint8_t blackbox_active = 0;
-
-#ifdef ENABLE_BLACKBOX
-    perf_counter_start(PERF_COUNTER_BLACKBOX);
-    blackbox_active = blackbox_update();
-    perf_counter_end(PERF_COUNTER_BLACKBOX);
-#endif
-
-#ifdef ENABLE_OSD
-    if (!blackbox_active) {
-      perf_counter_start(PERF_COUNTER_OSD);
-      osd_display();
-      perf_counter_end(PERF_COUNTER_OSD);
-    }
-#endif
-
-    state.cpu_load = (time_micros() - lastlooptime);
-    //one last check to make sure we catch any looptime problems and rerun autodetect live
-    if (loop_ctr == 255 && state.cpu_load > state.looptime_autodetect + 5) {
-      blown_loop_counter++;
-      if (blown_loop_counter > 100) {
-        blown_loop_counter = 0;
-        loop_ctr = 0;
-        looptime_warning++;
-      }
-    }
-
-    debug_update();
-
-    perf_counter_end(PERF_COUNTER_TOTAL);
-    perf_counter_update();
-
-#ifdef STM32F4
-    if (usb_detect()) {
-      flags.usb_active = 1;
-#ifndef ALLOW_USB_ARMING
-      if (rx_aux_on(AUX_ARMING))
-        flags.arm_safety = 1; //final safety check to disallow arming during USB operation
-#endif
-      usb_configurator();
-    } else {
-      flags.usb_active = 0;
-      extern usb_motor_test_t usb_motor_test;
-      usb_motor_test.active = 0;
-    }
-#endif
-
-    while ((time_micros() - time) < state.looptime_autodetect)
-      __NOP();
-
-  } // end loop
+    scheduler_update();
+  }
 }
 
 // the error codes indicate a failure that prevents normal operation

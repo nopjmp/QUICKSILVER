@@ -47,7 +47,7 @@ void blackbox_init() {
   data_flash_init();
 }
 
-uint8_t blackbox_update() {
+void blackbox_update() {
   static uint32_t loop_counter = 0;
 
   data_flash_result_t flash_result = data_flash_update();
