@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "project.h"
@@ -108,6 +109,7 @@ void rx_init();
 void rx_serial_init();
 
 void rx_precalc();
+bool rx_poll();
 void rx_check();
 
 float rx_expo(float x, float exp);
