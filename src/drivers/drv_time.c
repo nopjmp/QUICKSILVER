@@ -6,8 +6,6 @@ void failloop(int val);
 
 #ifdef STM32F4
 
-#define TICKS_PER_US (SYS_CLOCK_FREQ_HZ / 1000000)
-
 static volatile uint32_t systick_count = 0;
 static volatile uint32_t systick_val = 0;
 static volatile uint32_t systick_pending = 0;
