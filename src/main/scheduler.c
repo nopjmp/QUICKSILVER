@@ -200,6 +200,8 @@ void scheduler_update() {
   }
 
   debug_update();
+
+  state.loop_counter++;
 }
 
 void reset_looptime() {

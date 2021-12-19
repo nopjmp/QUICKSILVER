@@ -2,6 +2,8 @@
 
 #include "profile.h"
 
+#define BLACKBOX_RATE 4
+
 typedef struct {
   uint32_t loop;
   uint32_t time;

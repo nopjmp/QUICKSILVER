@@ -36,6 +36,8 @@ typedef struct {
 extern control_flags_t flags;
 
 typedef struct {
+  uint32_t loop_counter;
+
   uint16_t looptime_autodetect;
   float looptime; // looptime in seconds
   float uptime;   // running sum of looptimes
@@ -87,6 +89,7 @@ typedef struct {
 } control_state_t;
 
 #define STATE_MEMBERS                       \
+  MEMBER(loop_counter, uint32)              \
   MEMBER(looptime_autodetect, uint16)       \
   MEMBER(looptime, float)                   \
   MEMBER(uptime, float)                     \
