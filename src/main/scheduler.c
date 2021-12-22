@@ -7,11 +7,13 @@
 #include "debug.h"
 #include "drv_time.h"
 #include "tasks.h"
+#include "usb_configurator.h"
 #include "util/cbor_helper.h"
 
 #define TASK_AVERAGE_SAMPLES 32
-#define TASK_RUNTIME_REDUCTION 0.99
-#define TASK_RUNTIME_BUFFER 15
+#define TASK_RUNTIME_REDUCTION 0.75
+#define TASK_RUNTIME_MARGIN 1.25
+#define TASK_RUNTIME_BUFFER 10
 
 #define US_TO_CYCLES(us) ((us)*TICKS_PER_US)
 #define CYCLES_TO_US(cycles) ((cycles) / TICKS_PER_US)
@@ -91,10 +93,6 @@ static void do_run_task(task_t *task) {
   task->func();
   const int32_t time_taken = time_cycles() - start;
 
-  if (time_taken > (task->runtime_avg + US_TO_CYCLES(TASK_RUNTIME_BUFFER))) {
-    task->runtime_worst = time_taken;
-  }
-
   if (time_taken < task->runtime_min) {
     task->runtime_min = time_taken;
   }
@@ -105,6 +103,10 @@ static void do_run_task(task_t *task) {
 
   if (time_taken > task->runtime_max) {
     task->runtime_max = time_taken;
+  }
+
+  if (task->runtime_worst < (task->runtime_avg * TASK_RUNTIME_MARGIN)) {
+    task->runtime_worst = task->runtime_avg * TASK_RUNTIME_MARGIN;
   }
 }
 
@@ -194,9 +196,9 @@ void scheduler_update() {
   state.cpu_load = (time_micros() - lastlooptime);
 
   //one last check to make sure we catch any looptime problems and rerun autodetect live
-  if (loop_ctr == 255 && state.cpu_load > (state.looptime_autodetect + 5)) {
+  if (loop_ctr == 255 && state.cpu_load > (state.looptime_autodetect + 20)) {
     blown_loop_counter++;
-    if (blown_loop_counter > 100) {
+    if (blown_loop_counter > 130) {
       blown_loop_counter = 0;
       loop_ctr = 0;
       looptime_warning++;
@@ -209,7 +211,6 @@ void scheduler_update() {
 }
 
 void reset_looptime() {
-  extern uint32_t lastlooptime;
   lastlooptime = time_micros();
 }
 
