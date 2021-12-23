@@ -20,9 +20,8 @@
 #ifdef ENABLE_OSD
 
 void osd_init() {
-  spi_max7456_init(); //init spi
-  max7456_init();     //init the max chip
-  osd_intro();        //print the splash screen
+  max7456_init(); //init the max chip
+  osd_intro();    //print the splash screen
 }
 
 //************************************************************************************************************************************************************************************

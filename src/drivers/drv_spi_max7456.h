@@ -53,7 +53,6 @@
 #define OSDBL_R 0xEC
 #define OSDBL_W 0x6C
 
-void spi_max7456_init();
 void max7456_init();
 
 void osd_intro();
