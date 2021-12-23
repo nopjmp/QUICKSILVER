@@ -8,73 +8,35 @@
 #include "drv_time.h"
 #include "project.h"
 
-#define SPI_SPEED_INIT MHZ_TO_HZ(0.5)
+static volatile uint8_t buffer[32];
+static volatile spi_bus_device_t bus = {
+    .port = GYRO_SPI_PORT,
+    .nss = GYRO_NSS,
 
-#define PORT spi_port_defs[GYRO_SPI_PORT]
+    .buffer = buffer,
+    .buffer_size = 32,
+};
 
-static void mpu6xxx_reinit_slow() {
-  spi_dma_wait_for_ready(GYRO_SPI_PORT);
-  LL_SPI_Disable(PORT.channel);
-
-  // SPI Config
-  LL_SPI_DeInit(PORT.channel);
-  LL_SPI_InitTypeDef spi_init;
-  spi_init.TransferDirection = LL_SPI_FULL_DUPLEX;
-  spi_init.Mode = LL_SPI_MODE_MASTER;
-  spi_init.DataWidth = LL_SPI_DATAWIDTH_8BIT;
-  spi_init.ClockPolarity = LL_SPI_POLARITY_HIGH;
-  spi_init.ClockPhase = LL_SPI_PHASE_2EDGE;
-  spi_init.NSS = LL_SPI_NSS_SOFT;
-  spi_init.BaudRate = spi_find_divder(SPI_SPEED_INIT);
-  spi_init.BitOrder = LL_SPI_MSB_FIRST;
-  spi_init.CRCCalculation = LL_SPI_CRCCALCULATION_DISABLE;
-  spi_init.CRCPoly = 7;
-  LL_SPI_Init(PORT.channel, &spi_init);
-
-  LL_SPI_Enable(PORT.channel);
+static uint32_t mpu6xxx_slow_divider() {
+  return spi_find_divder(MHZ_TO_HZ(0.5));
 }
 
-static void mpu6xxx_reinit_fast() {
-  spi_dma_wait_for_ready(GYRO_SPI_PORT);
-  LL_SPI_Disable(PORT.channel);
-
-  // SPI Config
-  LL_SPI_DeInit(PORT.channel);
-  LL_SPI_InitTypeDef spi_init;
-  spi_init.TransferDirection = LL_SPI_FULL_DUPLEX;
-  spi_init.Mode = LL_SPI_MODE_MASTER;
-  spi_init.DataWidth = LL_SPI_DATAWIDTH_8BIT;
-  spi_init.ClockPolarity = LL_SPI_POLARITY_HIGH;
-  spi_init.ClockPhase = LL_SPI_PHASE_2EDGE;
-  spi_init.NSS = LL_SPI_NSS_SOFT;
-
+static uint32_t mpu6xxx_fast_divider() {
   switch (GYRO_TYPE) {
   case ICM20601:
   case ICM20608:
-    spi_init.BaudRate = spi_find_divder(MHZ_TO_HZ(5.25));
-    break;
+    return spi_find_divder(MHZ_TO_HZ(5.25));
 
   case ICM20602:
-    spi_init.BaudRate = spi_find_divder(MHZ_TO_HZ(10.5));
-    break;
+    return spi_find_divder(MHZ_TO_HZ(10.5));
 
   case MPU6XXX:
   default:
-    spi_init.BaudRate = spi_find_divder(MHZ_TO_HZ(21));
-    break;
+    return spi_find_divder(MHZ_TO_HZ(21));
   }
-
-  spi_init.BitOrder = LL_SPI_MSB_FIRST;
-  spi_init.CRCCalculation = LL_SPI_CRCCALCULATION_DISABLE;
-  spi_init.CRCPoly = 7;
-  LL_SPI_Init(PORT.channel, &spi_init);
-
-  LL_SPI_Enable(PORT.channel);
 }
 
 static void mpu6xxx_init() {
-
-  spi_init_pins(GYRO_SPI_PORT, GYRO_NSS);
 
 // Interrupt GPIO
 #ifdef GYRO_INT
@@ -86,16 +48,8 @@ static void mpu6xxx_init() {
   gpio_pin_init(&gpio_init, GYRO_INT);
 #endif
 
-  spi_enable_rcc(GYRO_SPI_PORT);
-
-  mpu6xxx_reinit_slow();
-
-  // Dummy read to clear receive buffer
-  while (LL_SPI_IsActiveFlag_TXE(PORT.channel) == RESET)
-    ;
-  LL_SPI_ReceiveData8(PORT.channel);
-
-  spi_dma_init(GYRO_SPI_PORT);
+  spi_bus_device_init(&bus);
+  spi_bus_device_reconfigure(&bus, true, mpu6xxx_slow_divider());
 }
 
 uint8_t mpu6xxx_configure() {
@@ -127,43 +81,38 @@ uint8_t mpu6xxx_configure() {
 
 // blocking dma read of a single register
 uint8_t mpu6xxx_read(uint8_t reg) {
-  mpu6xxx_reinit_slow();
+  spi_bus_device_reconfigure(&bus, true, mpu6xxx_slow_divider());
 
   uint8_t buffer[2] = {reg | 0x80, 0x00};
 
-  spi_csn_enable(GYRO_NSS);
-  spi_dma_transfer_bytes(GYRO_SPI_PORT, buffer, 2);
-  spi_csn_disable(GYRO_NSS);
+  spi_txn_t *txn = spi_txn_init(&bus, NULL);
+  spi_txn_add_seg(txn, buffer, buffer, 2);
+  spi_txn_submit(txn);
+
+  spi_txn_wait(&bus);
 
   return buffer[1];
 }
 
 // blocking dma write of a single register
 void mpu6xxx_write(uint8_t reg, uint8_t data) {
-  mpu6xxx_reinit_slow();
+  spi_bus_device_reconfigure(&bus, true, mpu6xxx_slow_divider());
 
-  uint8_t buffer[2] = {reg, data};
+  spi_txn_t *txn = spi_txn_init(&bus, NULL);
+  spi_txn_add_seg_const(txn, reg);
+  spi_txn_add_seg_const(txn, data);
+  spi_txn_submit(txn);
 
-  spi_csn_enable(GYRO_NSS);
-  spi_dma_transfer_bytes(GYRO_SPI_PORT, buffer, 2);
-  spi_csn_disable(GYRO_NSS);
+  spi_txn_wait(&bus);
 }
 
-void mpu6xxx_read_data(uint8_t reg, uint8_t *data, uint32_t size) {
-  mpu6xxx_reinit_fast();
+void mpu6xxx_read_data(uint8_t reg, uint8_t *data, int size) {
+  spi_bus_device_reconfigure(&bus, true, mpu6xxx_fast_divider());
 
-  uint8_t buffer[size + 1];
+  spi_txn_t *txn = spi_txn_init(&bus, NULL);
+  spi_txn_add_seg_const(txn, reg | 0x80);
+  spi_txn_add_seg(txn, data, NULL, size);
+  spi_txn_submit(txn);
 
-  buffer[0] = reg | 0x80;
-  for (uint32_t i = 0; i < size; i++) {
-    buffer[i + 1] = 0x0;
-  }
-
-  spi_csn_enable(GYRO_NSS);
-  spi_dma_transfer_bytes(GYRO_SPI_PORT, buffer, size + 1);
-  spi_csn_disable(GYRO_NSS);
-
-  for (int i = 1; i < size + 1; i++) {
-    data[i - 1] = buffer[i];
-  }
+  spi_txn_wait(&bus);
 }
