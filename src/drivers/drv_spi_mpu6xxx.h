@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#include "drv_spi.h"
+#include "drv_spi_gyro.h"
+
 #define MPU_BIT_SLEEP 0x40
 #define MPU_BIT_H_RESET 0x80
 #define MPU_BITS_CLKSEL 0x07
@@ -129,3 +132,6 @@ uint8_t mpu6xxx_configure();
 void mpu6xxx_write(uint8_t reg, uint8_t data);
 uint8_t mpu6xxx_read(uint8_t reg);
 void mpu6xxx_read_data(uint8_t reg, uint8_t *data, uint32_t size);
+
+void mpu6xxx_read_start(spi_txn_done_fn_t done_fn);
+void mpu6xxx_read_finish(gyro_data_t *data);

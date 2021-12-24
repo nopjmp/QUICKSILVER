@@ -106,7 +106,7 @@ void mpu6xxx_write(uint8_t reg, uint8_t data) {
   spi_txn_wait(&bus);
 }
 
-void mpu6xxx_read_data(uint8_t reg, uint8_t *data, int size) {
+void mpu6xxx_read_data(uint8_t reg, uint8_t *data, uint32_t size) {
   spi_bus_device_reconfigure(&bus, true, mpu6xxx_fast_divider());
 
   spi_txn_t *txn = spi_txn_init(&bus, NULL);
@@ -115,4 +115,32 @@ void mpu6xxx_read_data(uint8_t reg, uint8_t *data, int size) {
   spi_txn_submit(txn);
 
   spi_txn_wait(&bus);
+}
+
+static uint8_t dma_buf[14];
+
+void mpu6xxx_read_start(spi_txn_done_fn_t done_fn) {
+  // make sure last read is done.
+  spi_txn_wait(&bus);
+
+  spi_bus_device_reconfigure(&bus, SPI_MODE_LEADING_EDGE, mpu6xxx_fast_divider());
+
+  spi_txn_t *txn = spi_txn_init(&bus, done_fn);
+  spi_txn_add_seg_const(txn, MPU_RA_ACCEL_XOUT_H | 0x80);
+  spi_txn_add_seg(txn, dma_buf, NULL, 14);
+  spi_txn_submit(txn);
+
+  spi_txn_continue(&bus);
+}
+
+void mpu6xxx_read_finish(gyro_data_t *data) {
+  data->accel.axis[0] = -(int16_t)((dma_buf[0] << 8) + dma_buf[1]);
+  data->accel.axis[1] = -(int16_t)((dma_buf[2] << 8) + dma_buf[3]);
+  data->accel.axis[2] = (int16_t)((dma_buf[4] << 8) + dma_buf[5]);
+
+  data->temp = (float)((int16_t)((dma_buf[6] << 8) + dma_buf[7])) / 333.87f + 21.f;
+
+  data->gyro.axis[1] = (int16_t)((dma_buf[8] << 8) + dma_buf[9]);
+  data->gyro.axis[0] = (int16_t)((dma_buf[10] << 8) + dma_buf[11]);
+  data->gyro.axis[2] = (int16_t)((dma_buf[12] << 8) + dma_buf[13]);
 }

@@ -22,9 +22,9 @@ uint8_t spi_gyro_init() {
   }
 }
 
-gyro_data_t spi_gyro_read() {
-  gyro_data_t data;
+static gyro_data_t data;
 
+static void spi_gyro_read_finish() {
   switch (GYRO_TYPE) {
   case ICM42605: {
     uint8_t buf[14];
@@ -59,20 +59,19 @@ gyro_data_t spi_gyro_read() {
   case ICM20601:
   case ICM20608:
   case ICM20602:
-  default: {
-    uint8_t buf[14];
-    mpu6xxx_read_data(MPU_RA_ACCEL_XOUT_H, buf, 14);
-
-    data.accel.axis[0] = -(int16_t)((buf[0] << 8) + buf[1]);
-    data.accel.axis[1] = -(int16_t)((buf[2] << 8) + buf[3]);
-    data.accel.axis[2] = (int16_t)((buf[4] << 8) + buf[5]);
-
-    data.temp = (float)((int16_t)((buf[6] << 8) + buf[7])) / 333.87f + 21.f;
-
-    data.gyro.axis[1] = (int16_t)((buf[8] << 8) + buf[9]);
-    data.gyro.axis[0] = (int16_t)((buf[10] << 8) + buf[11]);
-    data.gyro.axis[2] = (int16_t)((buf[12] << 8) + buf[13]);
+  default:
+    mpu6xxx_read_finish(&data);
   }
+}
+
+gyro_data_t spi_gyro_read() {
+  switch (GYRO_TYPE) {
+  case MPU6XXX:
+  case ICM20601:
+  case ICM20608:
+  case ICM20602:
+  default:
+    mpu6xxx_read_start(spi_gyro_read_finish);
   }
 
   return data;
