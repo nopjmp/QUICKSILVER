@@ -15,6 +15,8 @@ static volatile spi_bus_device_t bus = {
 
     .buffer = buffer,
     .buffer_size = 32,
+
+    .auto_continue = true,
 };
 
 static uint32_t mpu6xxx_slow_divider() {
