@@ -168,17 +168,20 @@ int main() {
 
   while (1) {
     uint32_t time = time_micros();
-    state.looptime = ((uint32_t)(time - lastlooptime));
+    state.looptime_us = ((uint32_t)(time - lastlooptime));
     lastlooptime = time;
 
     perf_counter_start(PERF_COUNTER_TOTAL);
 
-    if (state.looptime <= 0)
-      state.looptime = 1;
-    state.looptime = state.looptime * 1e-6f;
-    if (state.looptime > 0.02f) { // max loop 20ms
+    if (state.looptime_us <= 0) {
+      state.looptime_us = 1;
+    }
+
+    state.looptime = state.looptime_us * 1e-6f;
+
+    // max loop 20ms
+    if (state.looptime > 0.02f) {
       failloop(FAILLOOP_LOOPTIME);
-      // endless loop
     }
 
     // looptime_autodetect sequence

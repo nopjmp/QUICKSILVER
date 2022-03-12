@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "debug.h"
 #include "drv_serial.h"
@@ -40,6 +41,15 @@
 #define GYRO_ID_4 0x72
 #endif
 
+#define SMITH_MAX_SAMPLES 6 * 8
+
+typedef struct {
+  uint8_t idx;
+
+  float samples[SMITH_MAX_SAMPLES + 1];
+  uint8_t sample_count;
+} smith_predictor_t;
+
 static filter_t filter[FILTER_MAX_SLOTS];
 static filter_state_t filter_state[FILTER_MAX_SLOTS][3];
 
@@ -48,11 +58,47 @@ extern target_info_t target_info;
 
 float gyrocal[3];
 
+static float smith_predictor_strength = 0.5f;
+static uint8_t smith_predictor_delay = 40;
+static uint16_t smith_predictor_filter_hz = 5;
+
+static smith_predictor_t smith_predictor[3];
+static filter_lp_pt1 smith_predictor_filter;
+static filter_state_t smith_predictor_filter_state[3];
+
+static void smith_predictor_init() {
+  memset(smith_predictor, 0, 3 * sizeof(smith_predictor_t));
+
+  for (uint8_t i = 0; i < 3; i++) {
+    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (LOOPTIME / 100.0f), SMITH_MAX_SAMPLES);
+  }
+
+  filter_lp_pt1_init(&smith_predictor_filter, smith_predictor_filter_state, 3, smith_predictor_filter_hz);
+}
+
+static float smith_predictor_step(uint8_t axis, float sample) {
+  if (smith_predictor[axis].sample_count <= 1) {
+    return sample;
+  }
+
+  smith_predictor[axis].idx++;
+  if (smith_predictor[axis].idx > smith_predictor[axis].sample_count) {
+    smith_predictor[axis].idx = 0;
+  }
+
+  const float delayed_sample = smith_predictor[axis].samples[smith_predictor[axis].idx];
+  const float delay_scaled_sample = smith_predictor_strength * (sample - delayed_sample);
+  const float delay_compenstated_sample = filter_lp_pt1_step(&smith_predictor_filter, &smith_predictor_filter_state[axis], delay_scaled_sample);
+
+  return sample + delay_compenstated_sample;
+}
+
 uint8_t sixaxis_init() {
   const uint8_t id = spi_gyro_init();
 
   target_info.gyro_id = id;
 
+  smith_predictor_init();
   for (uint8_t i = 0; i < FILTER_MAX_SLOTS; i++) {
     filter_init(profile.filter.gyro[i].type, &filter[i], filter_state[i], 3, profile.filter.gyro[i].cutoff_freq);
   }
@@ -154,12 +200,16 @@ void sixaxis_read() {
 
   filter_coeff(profile.filter.gyro[0].type, &filter[0], profile.filter.gyro[0].cutoff_freq);
   filter_coeff(profile.filter.gyro[1].type, &filter[1], profile.filter.gyro[1].cutoff_freq);
+  filter_lp_pt1_coeff(&smith_predictor_filter, smith_predictor_filter_hz);
 
   for (int i = 0; i < 3; i++) {
+    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (state.looptime_us / 100.0f), SMITH_MAX_SAMPLES);
+
     state.gyro.axis[i] = state.gyro_raw.axis[i];
 
     state.gyro.axis[i] = filter_step(profile.filter.gyro[0].type, &filter[0], &filter_state[0][i], state.gyro.axis[i]);
     state.gyro.axis[i] = filter_step(profile.filter.gyro[1].type, &filter[1], &filter_state[1][i], state.gyro.axis[i]);
+    state.gyro.axis[i] = smith_predictor_step(i, state.gyro.axis[i]);
   }
 }
 
