@@ -59,7 +59,7 @@ extern target_info_t target_info;
 float gyrocal[3];
 
 static float smith_predictor_strength = 0.5f;
-static uint8_t smith_predictor_delay = 40;
+static float smith_predictor_delay = 4.0;
 static uint16_t smith_predictor_filter_hz = 5;
 
 static smith_predictor_t smith_predictor[3];
@@ -70,7 +70,7 @@ static void smith_predictor_init() {
   memset(smith_predictor, 0, 3 * sizeof(smith_predictor_t));
 
   for (uint8_t i = 0; i < 3; i++) {
-    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (LOOPTIME / 100.0f), SMITH_MAX_SAMPLES);
+    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (LOOPTIME / 1000.0f), SMITH_MAX_SAMPLES);
   }
 
   filter_lp_pt1_init(&smith_predictor_filter, smith_predictor_filter_state, 3, smith_predictor_filter_hz);
@@ -203,7 +203,7 @@ void sixaxis_read() {
   filter_lp_pt1_coeff(&smith_predictor_filter, smith_predictor_filter_hz);
 
   for (int i = 0; i < 3; i++) {
-    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (state.looptime_us / 100.0f), SMITH_MAX_SAMPLES);
+    smith_predictor[i].sample_count = min_uint32(smith_predictor_delay / (state.looptime_us / 1000.0f), SMITH_MAX_SAMPLES);
 
     state.gyro.axis[i] = state.gyro_raw.axis[i];
 
