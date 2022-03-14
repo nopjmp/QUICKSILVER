@@ -93,6 +93,18 @@
     ]
   },
   {
+    "name": "flywoof7dual",
+    "configurations": [
+      {
+        "name": "brushless.serial",
+        "defines": {
+          "BRUSHLESS_TARGET": "",
+          "RX_UNIFIED_SERIAL": ""
+        }
+      }
+    ]
+  },
+  {
     "name": "matekf405",
     "configurations": [
       {
